@@ -2,7 +2,8 @@ console.log('Content script loaded.');
 
 
 class Player {
-    constructor() {
+    constructor(toast) {
+        this.toast = toast;
     }
 
     getSpeed() {
@@ -17,18 +18,44 @@ class Player {
 
     setSpeed(speed) {
         const video = document.querySelector('video');
+        if (this.getSpeed() === speed) {
+            return
+        }
         if (video) {
-            console.log(`Changing playback speed to: ${speed}`);
             video.playbackRate = speed;
         } else {
             console.log('No video element found on the page.');
         }
+        this.toast.setContent(`Speed: ${Math.floor(this.getSpeed() * 100) / 100}`);
     }
 
     seekForward(seconds) {
         const video = document.querySelector('video');
         if (video) {
             video.currentTime += seconds;
+            this.toast.setContent(`<< ${seconds}s`);
+        } else {
+            console.log('No video element found on the page.');
+        }
+    }
+
+    pauseOrPlay() {
+        const video = document.querySelector('video');
+        if (video.paused) {
+            video.play()
+        } else {
+            video.pause()
+        }
+    }
+
+    fullscreenToggle() {
+        const video = document.querySelector('video');
+        if (video) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                video.requestFullscreen();
+            }
         } else {
             console.log('No video element found on the page.');
         }
@@ -36,7 +63,9 @@ class Player {
 }
 
 class Toast {
+
     constructor() {
+        this.start = 0;
         this.toast = document.getElementById("toast");
         if (this.toast == null) {
             console.log('Creating toast element...');
@@ -44,6 +73,7 @@ class Toast {
             style.textContent = `
 #toast {
   visibility: hidden;
+  opacity: 0.5;
   z-index: 9999;
   min-width: 250px;
   margin-left: -125px;
@@ -74,10 +104,13 @@ class Toast {
     }
 
     setContent(content) {
+        this.start = new Date().getTime();
         this.toast.className = "show";
         this.toast.textContent = content;
         setTimeout(() => {
-            this.toast.className = this.toast.className.replace("show", "");
+            if (this.start + 3000 <= new Date().getTime()) {
+                this.toast.className = this.toast.className.replace("show", "");
+            }
         }, 3000);
     }
 }
@@ -127,55 +160,64 @@ class GamePad {
 
         let state = {idx: idx, val: val};
 
-        // if not pressed last time
-        if (!this.pressed) {
-            // save state and ts
-            this.pressed = true;
-            this.ts = new Date().getTime();
-            return state;
+        // if pressed less than 100 ms ago, return val as -1, to indicate that the button is still pressed
+        if (this.pressed && new Date().getTime() - this.ts < 100) {
+            return {idx: idx, val: -1};
         }
-
-        // if key pressed, only check state every 100 ms
-        if (new Date().getTime() - this.ts < 100) {
-            return null;
-        }
-
 
         // save state and ts
         this.pressed = true;
         this.ts = new Date().getTime();
-
         return state;
     }
 }
 
 window.addEventListener("gamepadconnected", function () {
     console.log('Initializing content script...');
-    const player = new Player();
     const toast = new Toast();
+    const player = new Player(toast);
     const gamepad = new GamePad();
+    let restored = true
 
     function handleGamepadInput() {
         function f() {
             let pressed = gamepad.getPressedKey()
             if (pressed == null) {
+                if (!restored) {
+                    player.setSpeed(1)
+                    restored = true
+                }
                 return null;
             }
 
-            console.log(pressed);
-
-            val = Math.floor(pressed.val * 10) / 10
-            if (pressed.idx === 7) {
-                // A button pressed
-                player.setSpeed(1 + val);
-                toast.setContent(`Speed: ${player.getSpeed()}`);
+            if (pressed.val === -1) {
+                return null
             }
-            if (pressed.idx === 6) {
-                // A button pressed
-                player.setSpeed(-1 - val);
-                toast.setContent(`Speed: ${player.getSpeed()}`);
+
+            restored = false;
+
+            let val = Math.floor(pressed.val * 100) / 100
+            if (pressed.idx === 7) {
+                if (val <= 0.5) {
+                    player.setSpeed(1 + val * 2);
+                } else {
+                    player.setSpeed(1 + 1 + (val-0.5) * 4);
+                }
+            }
+            if (pressed.idx === 2) {
+                player.seekForward(-1)
+            }
+            if (pressed.idx === 14) {
+                player.seekForward(-5)
+            }
+            if (pressed.idx === 11) {
+                player.pauseOrPlay()
+            }
+            if (pressed.idx === 10) {
+                player.fullscreenToggle()
             }
         }
+
         f()
 
         // handle button presses
