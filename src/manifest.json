@@ -1,23 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "GamePad Controller for YouTube",
+  "name": "GamePad Controller for Video Player",
   "version": "1.0",
-  "description": "Control YouTube playback speed using a gamepad.",
+  "description": "Control video player using a gamepad, including local video player.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
+      "matches": ["*://*.youtube.com/*", "*://*.bilibili.com/*"],
       "js": ["content.js"]
     }
   ],
   "action": {
-    // "default_popup": "popup.html",
     "default_icon": {
       "16": "images/icon16.png",
       "48": "images/icon48.png",

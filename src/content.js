@@ -1,5 +1,23 @@
 console.log('Content script loaded.');
+let port
 
+
+const ACTION = Object.freeze({
+    // Msg from background script to the content script, to enable/disable gamepad API listening
+    EnableListening: "enableListening",
+    DisableListening: "disableListening",
+
+    // Msg from content script to the background script, to pass the key pressing state
+    KeyPressed: "keyPressed",
+
+
+    // Msg from background script to the content script, to control the video player
+    GetSpeed: "getSpeed",
+    SetSpeed: "setSpeed",
+    SeekForward: "seekForward",
+    PauseOrPlay: "pauseOrPlay",
+    FullscreenToggle: "fullscreenToggle",
+})
 
 class Player {
     constructor(toast) {
@@ -10,17 +28,16 @@ class Player {
         const video = document.querySelector('video');
         if (video) {
             return video.playbackRate;
-        } else {
-            console.log('No video element found on the page.');
-            return null;
         }
+        console.log('No video element found on the page.');
+        return null;
     }
 
     setSpeed(speed) {
-        const video = document.querySelector('video');
         if (this.getSpeed() === speed) {
             return
         }
+        const video = document.querySelector('video');
         if (video) {
             video.playbackRate = speed;
         } else {
@@ -33,7 +50,11 @@ class Player {
         const video = document.querySelector('video');
         if (video) {
             video.currentTime += seconds;
-            this.toast.setContent(`<< ${seconds}s`);
+            if (seconds > 0) {
+                this.toast.setContent(`>> ${seconds}s`);
+            } else {
+                this.toast.setContent(`<< ${seconds}s`);
+            }
         } else {
             console.log('No video element found on the page.');
         }
@@ -63,7 +84,6 @@ class Player {
 }
 
 class Toast {
-
     constructor() {
         this.start = 0;
         this.toast = document.getElementById("toast");
@@ -115,115 +135,91 @@ class Toast {
     }
 }
 
+let listening = false;
+let toast = null
+let player = null
 
-class GamePad {
-    constructor() {
-        // previous button state
-        this.pressed = false
-        // previous state timestamp
-        this.ts = 0
+function addListener() {
+    if (listening) {
+        console.log('Already listening for gamepad input.');
+        return;
     }
 
-    getPressedKey() {
-        const gamepads = navigator.getGamepads();
-        if (!gamepads) {
-            return null;
-        }
-        const gamepad = gamepads[0];
-        if (!gamepad) {
-            return null
-        }
-
-
-        let idx = -1;
-        let val = -1;
-        for (let i = 0; i < gamepad.buttons.length; i++) {
-            if (gamepad.buttons[i].value > 0.1) {
-                idx = i;
-                val = gamepad.buttons[i].value;
-                break
-            }
-        }
-        for (let i = 0; i < gamepad.axes.length; i++) {
-            if (gamepad.axes[i] > 0.1) {
-                idx = -i;
-                val = gamepad.axes
-                break
-            }
-        }
-
-        // if no button is pressed, return null, and save null as state
-        if (idx === -1) {
-            this.pressed = false
-            return null;
-        }
-
-        let state = {idx: idx, val: val};
-
-        // if pressed less than 100 ms ago, return val as -1, to indicate that the button is still pressed
-        if (this.pressed && new Date().getTime() - this.ts < 100) {
-            return {idx: idx, val: -1};
-        }
-
-        // save state and ts
-        this.pressed = true;
-        this.ts = new Date().getTime();
-        return state;
+    toast = new Toast();
+    player = new Player(toast);
+    if (port == null) {
+        port = chrome.runtime.connect({name: "GamePad-Controller-for-Video-Player"}); // 建立连接
     }
+    port.onMessage.addListener((msg) => {
+        switch (msg.action) {
+            case ACTION.GetSpeed:
+                const speed = player.getSpeed();
+                port.postMessage({id: msg.id, action: ACTION.GetSpeed, speed: speed});
+                break;
+            case ACTION.SetSpeed:
+                player.setSpeed(msg.param.speed);
+                break;
+            case ACTION.SeekForward:
+                player.seekForward(msg.param.seconds);
+                break;
+            case ACTION.PauseOrPlay:
+                player.pauseOrPlay();
+                break;
+            case ACTION.FullscreenToggle:
+                player.fullscreenToggle();
+                break;
+            default:
+                console.warn('Unknown action:', msg.action);
+        }
+    })
+
+    window.addEventListener("gamepadconnected", function () {
+        console.log('Initializing content script...');
+
+        function handleGamepadInput() {
+            function f() {
+                const gps = navigator.getGamepads();
+                if (!gps || gps.length === 0) {
+                    return null;
+                }
+                const gp = gps[0];
+                if (!gp) {
+                    return null
+                }
+                if (port != null) {
+                    port.postMessage({
+                        id: Date.now() + Math.random(),
+                        action: ACTION.KeyPressed,
+                        param: {
+                            axes: gp.axes,
+                            buttons: gp.buttons.map(button => button.value)
+                        }
+                    });
+                }
+            }
+
+            f()
+
+            // handle button presses
+            requestAnimationFrame(handleGamepadInput);
+        }
+
+        console.log('Starting gamepad input listener...');
+        handleGamepadInput();
+    });
+    listening = true;
 }
 
-window.addEventListener("gamepadconnected", function () {
-    console.log('Initializing content script...');
-    const toast = new Toast();
-    const player = new Player(toast);
-    const gamepad = new GamePad();
-    let restored = true
 
-    function handleGamepadInput() {
-        function f() {
-            let pressed = gamepad.getPressedKey()
-            if (pressed == null) {
-                if (!restored) {
-                    player.setSpeed(1)
-                    restored = true
-                }
-                return null;
-            }
-
-            if (pressed.val === -1) {
-                return null
-            }
-
-            restored = false;
-
-            let val = Math.floor(pressed.val * 100) / 100
-            if (pressed.idx === 7) {
-                if (val <= 0.5) {
-                    player.setSpeed(1 + val * 2);
-                } else {
-                    player.setSpeed(1 + 1 + (val-0.5) * 4);
-                }
-            }
-            if (pressed.idx === 2) {
-                player.seekForward(-1)
-            }
-            if (pressed.idx === 14) {
-                player.seekForward(-5)
-            }
-            if (pressed.idx === 11) {
-                player.pauseOrPlay()
-            }
-            if (pressed.idx === 10) {
-                player.fullscreenToggle()
-            }
-        }
-
-        f()
-
-        // handle button presses
-        requestAnimationFrame(handleGamepadInput);
+// receive messages from the background script
+console.log('Listening for gamepad input.');
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('Received message from background script:', request);
+    if (request.action === ACTION.EnableListening) {
+        sendResponse({status: "success"});
+        addListener()
+        return true; // indicates that the response will be sent asynchronously
     }
-
-    console.log('Starting gamepad input listener...');
-    handleGamepadInput();
+    sendResponse({status: "success",})
+    return true
 });
