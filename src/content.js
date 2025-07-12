@@ -1,7 +1,51 @@
-console.log('Content script loaded.');
-let port
+const defaultConfig = {
+    "variables": {
+        "DeadZone": 0.2
+    },
+    "keymapping": {
+        "buttons": {
+            "1": {
+                "action": "seekForward",
+                "params": {
+                    "seconds": 5
+                }
+            },
+            "2": {
+                "action": "seekForward",
+                "params": {
+                    "seconds": -1
+                }
+            },
+            "7": {
+                "action": "setSpeed"
+            },
+            "10": {
+                "action": "fullscreenToggle"
+            },
+            "11": {
+                "action": "pauseOrPlay"
+            },
+            "14": {
+                "action": "seekForward",
+                "params": {
+                    "seconds": -5
+                }
+            }
+        }
+    }
+};
 
-const blindArea = 0.2;
+let config = defaultConfig;
+
+chrome.storage.sync.get({config: defaultConfig}, (data) => {
+    config = data.config;
+});
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync' && changes.config) {
+        config = changes.config.newValue;
+    }
+});
 
 const ACTION = Object.freeze({
     // Msg from background script to the content script, to enable/disable gamepad API listening
@@ -167,55 +211,55 @@ class GamePad {
         this.restored = false;
 
         let val = Math.floor(pressed.val * 100) / 100
-        // https://w3c.github.io/gamepad/standard_gamepad.svg
-        switch (pressed.type) {
-            case TYPE.axis:
+        if (!config || !config.keymapping) {
+            return;
+        }
+
+        const keymap = config.keymapping.buttons[pressed.idx];
+        if (!keymap) {
+            return;
+        }
+
+        switch (keymap.action) {
+            case "seekForward":
+                player.seekForward(keymap.params.seconds);
                 break;
-            case TYPE.button:
-                switch (pressed.idx) {
-                    case 1:
-                        player.seekForward(5)
-                        break;
-                    case 2:
-                        player.seekForward(-1)
-                        break;
-                    case 7:
-                        if (val <= 0.5) {
-                            player.setSpeed(1 + val * 2);
-                        } else {
-                            player.setSpeed(1 + 1 + (val - 0.5) * 4);
-                        }
-                        break;
-                    case 10:
-                        player.fullscreenToggle();
-                        break;
-                    case 11:
-                        player.pauseOrPlay();
-                        break;
-                    case 14:
-                        player.seekForward(-5)
-                        break;
+            case "setSpeed":
+                let speed;
+                if (keymap.params && keymap.params.speed !== undefined) {
+                    speed = keymap.params.speed;
+                } else {
+                    speed = (val <= 0.5) ? (1 + val * 2) : (1 + 1 + (val - 0.5) * 4);
                 }
+                player.setSpeed(speed);
+                break;
+            case "fullscreenToggle":
+                player.fullscreenToggle();
+                break;
+            case "pauseOrPlay":
+                player.pauseOrPlay();
+                break;
         }
     }
 
     getPressedKey(gamepad) {
+        const DeadZone = config && config.variables && config.variables.DeadZone ? config.variables.DeadZone : 0.2;
         let type = null
         let idx = null;
         let val = null;
         for (let i = 0; i < gamepad.axes.length; i++) {
-            if (gamepad.axes[i].value > blindArea) {
+            if (gamepad.axes[i].value > DeadZone) {
                 type = TYPE.axis;
                 idx = i;
-                val = (gamepad.axes[i].value - blindArea) / (1 - blindArea);
+                val = (gamepad.axes[i].value - DeadZone) / (1 - DeadZone);
                 break
             }
         }
         for (let i = 0; i < gamepad.buttons.length; i++) {
-            if (gamepad.buttons[i].value > blindArea) {
+            if (gamepad.buttons[i].value > DeadZone) {
                 type = TYPE.button;
                 idx = i;
-                val = (gamepad.buttons[i].value - blindArea) / (1 - blindArea);
+                val = (gamepad.buttons[i].value - DeadZone) / (1 - DeadZone);
                 break
             }
         }
