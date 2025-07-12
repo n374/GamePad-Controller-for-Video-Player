@@ -8,9 +8,6 @@
     "scripting",
     "tabs"
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*", "*://*.bilibili.com/*"],

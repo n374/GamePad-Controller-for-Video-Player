@@ -1,6 +1,7 @@
 console.log('Content script loaded.');
 let port
 
+const blindArea = 0.2;
 
 const ACTION = Object.freeze({
     // Msg from background script to the content script, to enable/disable gamepad API listening
@@ -135,44 +136,114 @@ class Toast {
     }
 }
 
-let listening = false;
-let toast = null
-let player = null
+
+const TYPE = Object.freeze({
+    button: "button",
+    axis: "axis"
+})
+
+class GamePad {
+    constructor() {
+        this.pressed = false; // state of the pressed button
+        this.ts = 0; // timestamp of the last pressed button
+        this.restored = true; // state of the restored speed
+    }
+
+
+    handleKeyPressed(gp) {
+        let pressed = this.getPressedKey(gp)
+        if (pressed == null) {
+            if (!this.restored) {
+                player.setSpeed(1)
+                this.restored = true
+            }
+            return null;
+        }
+
+        if (pressed.val === null) {
+            return null
+        }
+
+        this.restored = false;
+
+        let val = Math.floor(pressed.val * 100) / 100
+        // https://w3c.github.io/gamepad/standard_gamepad.svg
+        switch (pressed.type) {
+            case TYPE.axis:
+                break;
+            case TYPE.button:
+                switch (pressed.idx) {
+                    case 1:
+                        player.seekForward(5)
+                        break;
+                    case 2:
+                        player.seekForward(-1)
+                        break;
+                    case 7:
+                        if (val <= 0.5) {
+                            player.setSpeed(1 + val * 2);
+                        } else {
+                            player.setSpeed(1 + 1 + (val - 0.5) * 4);
+                        }
+                        break;
+                    case 10:
+                        player.fullscreenToggle();
+                        break;
+                    case 11:
+                        player.pauseOrPlay();
+                        break;
+                    case 14:
+                        player.seekForward(-5)
+                        break;
+                }
+        }
+    }
+
+    getPressedKey(gamepad) {
+        let type = null
+        let idx = null;
+        let val = null;
+        for (let i = 0; i < gamepad.axes.length; i++) {
+            if (gamepad.axes[i].value > blindArea) {
+                type = TYPE.axis;
+                idx = i;
+                val = (gamepad.axes[i].value - blindArea) / (1 - blindArea);
+                break
+            }
+        }
+        for (let i = 0; i < gamepad.buttons.length; i++) {
+            if (gamepad.buttons[i].value > blindArea) {
+                type = TYPE.button;
+                idx = i;
+                val = (gamepad.buttons[i].value - blindArea) / (1 - blindArea);
+                break
+            }
+        }
+
+        // if no button is pressed, return null, and save null as state
+        if (idx === null) {
+            this.pressed = false
+            return null;
+        }
+
+        let state = {type: type, idx: idx, val: val};
+
+        // if pressed less than 100 ms ago, return val as null, to indicate that the button is still pressed
+        if (this.pressed && new Date().getTime() - this.ts < 100) {
+            return {type: type, idx: idx, val: null};
+        }
+
+        // save state and ts
+        this.pressed = true;
+        this.ts = new Date().getTime();
+        return state;
+    }
+}
+
+let gamePad = new GamePad();
+let player = new Player(new Toast());
 
 function addListener() {
-    if (listening) {
-        console.log('Already listening for gamepad input.');
-        return;
-    }
-
-    toast = new Toast();
-    player = new Player(toast);
-    if (port == null) {
-        port = chrome.runtime.connect({name: "GamePad-Controller-for-Video-Player"}); // 建立连接
-    }
-    port.onMessage.addListener((msg) => {
-        switch (msg.action) {
-            case ACTION.GetSpeed:
-                const speed = player.getSpeed();
-                port.postMessage({id: msg.id, action: ACTION.GetSpeed, speed: speed});
-                break;
-            case ACTION.SetSpeed:
-                player.setSpeed(msg.param.speed);
-                break;
-            case ACTION.SeekForward:
-                player.seekForward(msg.param.seconds);
-                break;
-            case ACTION.PauseOrPlay:
-                player.pauseOrPlay();
-                break;
-            case ACTION.FullscreenToggle:
-                player.fullscreenToggle();
-                break;
-            default:
-                console.warn('Unknown action:', msg.action);
-        }
-    })
-
     window.addEventListener("gamepadconnected", function () {
         console.log('Initializing content script...');
 
@@ -183,18 +254,8 @@ function addListener() {
                     return null;
                 }
                 const gp = gps[0];
-                if (!gp) {
-                    return null
-                }
-                if (port != null) {
-                    port.postMessage({
-                        id: Date.now() + Math.random(),
-                        action: ACTION.KeyPressed,
-                        param: {
-                            axes: gp.axes,
-                            buttons: gp.buttons.map(button => button.value)
-                        }
-                    });
+                if (gp) {
+                    gamePad.handleKeyPressed(gp);
                 }
             }
 
@@ -207,19 +268,5 @@ function addListener() {
         console.log('Starting gamepad input listener...');
         handleGamepadInput();
     });
-    listening = true;
 }
-
-
-// receive messages from the background script
-console.log('Listening for gamepad input.');
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Received message from background script:', request);
-    if (request.action === ACTION.EnableListening) {
-        sendResponse({status: "success"});
-        addListener()
-        return true; // indicates that the response will be sent asynchronously
-    }
-    sendResponse({status: "success",})
-    return true
-});
+addListener()
