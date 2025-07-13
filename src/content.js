@@ -147,7 +147,6 @@ class Toast {
 }
 
 let player = new Player(new Toast());
-let pressedState = { pressed: false, ts: 0, restored: true };
 
 function handleGamepadInput() {
     const gps = navigator.getGamepads();
@@ -161,7 +160,7 @@ function handleGamepadInput() {
         return;
     }
 
-    const action = getAction(gp, config, pressedState);
+    const action = getAction(gp, config);
 
     if (action) {
         switch (action.action) {

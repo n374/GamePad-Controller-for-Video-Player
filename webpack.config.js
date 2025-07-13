@@ -11,6 +11,7 @@ module.exports = {
     path: path.resolve(__dirname, 'src/dist'),
   },
   mode: 'production',
+  watch: true,
   module: {
     rules: [
       {

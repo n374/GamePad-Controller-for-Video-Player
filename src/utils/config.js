@@ -1,6 +1,7 @@
 export const defaultConfig = {
     "variables": {
-        "DeadZone": 0.2
+        "DeadZone": 0.2,
+        "MinInterval": 200
     },
     "keymapping": {
         "buttons": {
