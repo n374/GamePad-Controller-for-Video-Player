@@ -21,9 +21,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  
   "bugs": {
     "url": "https://github.com/n374/GamePad-Controller-for-Video-Player/issues"
   },
-  "homepage": "https://github.com/n374/GamePad-Controller-for-Video-Player#readme"
+  "homepage": "https://github.com/n374/GamePad-Controller-for-Video-Player#readme",
+  "dependencies": {
+    "sdl2-gamecontroller": "^1.0.11"
+  }
 }
