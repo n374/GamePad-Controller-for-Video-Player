@@ -8,6 +8,20 @@ The GamePad Controller for Video Playe is a Chrome extension that allows users t
 - Seamless integration with HTML5 video player.
 - Easy to set up and use.
 
+## Build
+
+To build the extension, you need to have Node.js and npm installed. 
+
+1. Install the dependencies:
+   ```
+   npm install
+   ```
+2. Build the extension:
+   ```
+   npm run build
+   ```
+This will create a `dist` directory inside `src` with the bundled files.
+
 ## Installation
 1. Clone the repository:
    ```
@@ -19,7 +33,7 @@ The GamePad Controller for Video Playe is a Chrome extension that allows users t
    ```
 3. Open Chrome and go to `chrome://extensions/`.
 4. Enable "Developer mode" in the top right corner.
-5. Click on "Load unpacked" and select the `src` directory of the project.
+5. Click on "Load unpacked" and select the project directory. Chrome will load the extension from the `src` directory, which is configured to use the bundled files from the `dist` directory.
 
 ## Usage
 1. Connect your gamepad to your computer.

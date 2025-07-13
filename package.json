@@ -1,0 +1,29 @@
+{
+  "name": "gamepad-controller-for-video-player",
+  "version": "1.0.0",
+  "description": "The GamePad Controller for Video Playe is a Chrome extension that allows users to control video player's playback speed using a gamepad. By leveraging the Gamepad API, this extension provides an interactive way to enhance the viewing experience.",
+  "main": "index.js",
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/preset-env": "^7.28.0",
+    "babel-loader": "^10.0.0",
+    "webpack": "^5.100.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "scripts": {
+    "build": "webpack",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n374/GamePad-Controller-for-Video-Player.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  
+  "bugs": {
+    "url": "https://github.com/n374/GamePad-Controller-for-Video-Player/issues"
+  },
+  "homepage": "https://github.com/n374/GamePad-Controller-for-Video-Player#readme"
+}

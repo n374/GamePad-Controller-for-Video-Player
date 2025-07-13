@@ -1,39 +1,5 @@
-const defaultConfig = {
-    "variables": {
-        "DeadZone": 0.2
-    },
-    "keymapping": {
-        "buttons": {
-            "1": {
-                "action": "seekForward",
-                "params": {
-                    "seconds": 5
-                }
-            },
-            "2": {
-                "action": "seekForward",
-                "params": {
-                    "seconds": -1
-                }
-            },
-            "7": {
-                "action": "setSpeed"
-            },
-            "10": {
-                "action": "fullscreenToggle"
-            },
-            "11": {
-                "action": "pauseOrPlay"
-            },
-            "14": {
-                "action": "seekForward",
-                "params": {
-                    "seconds": -5
-                }
-            }
-        }
-    }
-};
+import { defaultConfig } from "./utils/config.js";
+import { getAction } from "./utils/gamepad.js";
 
 let config = defaultConfig;
 
@@ -180,58 +146,30 @@ class Toast {
     }
 }
 
+let player = new Player(new Toast());
+let pressedState = { pressed: false, ts: 0, restored: true };
 
-const TYPE = Object.freeze({
-    button: "button",
-    axis: "axis"
-})
-
-class GamePad {
-    constructor() {
-        this.pressed = false; // state of the pressed button
-        this.ts = 0; // timestamp of the last pressed button
-        this.restored = true; // state of the restored speed
+function handleGamepadInput() {
+    const gps = navigator.getGamepads();
+    if (!gps || gps.length === 0) {
+        requestAnimationFrame(handleGamepadInput);
+        return;
+    }
+    const gp = gps[0];
+    if (!gp) {
+        requestAnimationFrame(handleGamepadInput);
+        return;
     }
 
+    const action = getAction(gp, config, pressedState);
 
-    handleKeyPressed(gp) {
-        let pressed = this.getPressedKey(gp)
-        if (pressed == null) {
-            if (!this.restored) {
-                player.setSpeed(1)
-                this.restored = true
-            }
-            return null;
-        }
-
-        if (pressed.val === null) {
-            return null
-        }
-
-        this.restored = false;
-
-        let val = Math.floor(pressed.val * 100) / 100
-        if (!config || !config.keymapping) {
-            return;
-        }
-
-        const keymap = config.keymapping.buttons[pressed.idx];
-        if (!keymap) {
-            return;
-        }
-
-        switch (keymap.action) {
+    if (action) {
+        switch (action.action) {
             case "seekForward":
-                player.seekForward(keymap.params.seconds);
+                player.seekForward(action.params.seconds);
                 break;
             case "setSpeed":
-                let speed;
-                if (keymap.params && keymap.params.speed !== undefined) {
-                    speed = keymap.params.speed;
-                } else {
-                    speed = (val <= 0.5) ? (1 + val * 2) : (1 + 1 + (val - 0.5) * 4);
-                }
-                player.setSpeed(speed);
+                player.setSpeed(action.params.speed);
                 break;
             case "fullscreenToggle":
                 player.fullscreenToggle();
@@ -242,75 +180,11 @@ class GamePad {
         }
     }
 
-    getPressedKey(gamepad) {
-        const DeadZone = config && config.variables && config.variables.DeadZone ? config.variables.DeadZone : 0.2;
-        let type = null
-        let idx = null;
-        let val = null;
-        for (let i = 0; i < gamepad.axes.length; i++) {
-            if (gamepad.axes[i].value > DeadZone) {
-                type = TYPE.axis;
-                idx = i;
-                val = (gamepad.axes[i].value - DeadZone) / (1 - DeadZone);
-                break
-            }
-        }
-        for (let i = 0; i < gamepad.buttons.length; i++) {
-            if (gamepad.buttons[i].value > DeadZone) {
-                type = TYPE.button;
-                idx = i;
-                val = (gamepad.buttons[i].value - DeadZone) / (1 - DeadZone);
-                break
-            }
-        }
-
-        // if no button is pressed, return null, and save null as state
-        if (idx === null) {
-            this.pressed = false
-            return null;
-        }
-
-        let state = {type: type, idx: idx, val: val};
-
-        // if pressed less than 100 ms ago, return val as null, to indicate that the button is still pressed
-        if (this.pressed && new Date().getTime() - this.ts < 100) {
-            return {type: type, idx: idx, val: null};
-        }
-
-        // save state and ts
-        this.pressed = true;
-        this.ts = new Date().getTime();
-        return state;
-    }
+    requestAnimationFrame(handleGamepadInput);
 }
 
-let gamePad = new GamePad();
-let player = new Player(new Toast());
-
-function addListener() {
-    window.addEventListener("gamepadconnected", function () {
-        console.log('Initializing content script...');
-
-        function handleGamepadInput() {
-            function f() {
-                const gps = navigator.getGamepads();
-                if (!gps || gps.length === 0) {
-                    return null;
-                }
-                const gp = gps[0];
-                if (gp) {
-                    gamePad.handleKeyPressed(gp);
-                }
-            }
-
-            f()
-
-            // handle button presses
-            requestAnimationFrame(handleGamepadInput);
-        }
-
-        console.log('Starting gamepad input listener...');
-        handleGamepadInput();
-    });
-}
-addListener()
+window.addEventListener("gamepadconnected", function () {
+    console.log('Initializing content script...');
+    console.log('Starting gamepad input listener...');
+    handleGamepadInput();
+});
